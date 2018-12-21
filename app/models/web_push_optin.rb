@@ -1,0 +1,2 @@
+class WebPushOptin < ApplicationRecord
+end
