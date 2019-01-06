@@ -1,142 +1,262 @@
-'use strict';
+'use strict'
 
-var isPushEnabled = false;
+window.RetentionRocket = {}
 
-function sendSubscriptionToServer(subscription) {
-  console.log("Sending subscription details to server")
-  fetch('/subscribe', { method: 'POST', credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(subscription) })
-}
+RetentionRocket.WebPush = {
 
-function unsubscribe() {
-  var pushButton = document.querySelector('.js-push-button');
-  pushButton.disabled = true;
-
-  navigator.serviceWorker.ready.then(function(serviceWorkerRegistration) {
-    // To unsubscribe from push messaging, you need get the subcription object, which you can call
-    // unsubscribe() on.
-    serviceWorkerRegistration.pushManager.getSubscription().then(
-      function(subscription) {
-        // Check we have a subscription to unsubscribe
-        if (!subscription) {
-          // No subscription object, so set the state to allow the user to subscribe to push
-          isPushEnabled = false;
-          pushButton.disabled = false;
-          pushButton.textContent = 'Enable Push Messages';
-          return;
-        }
-
-        fetch('/unsubscribe', { method: 'DELETE', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(subscription) })
-
-        // We have a subcription, so call unsubscribe on it
-        subscription.unsubscribe().then(function() {
-          pushButton.disabled = false;
-          pushButton.textContent = 'Enable Push Messages';
-          isPushEnabled = false;
-        }).catch(function(e) {
-          // We failed to unsubscribe, this can lead to an unusual state, so may be best to remove
-          // the subscription id from your data store and inform the user that you disabled push
-          console.log('Unsubscription error: ', e);
-          pushButton.disabled = false;
-        });
-      }).catch(function(e) {
-        console.log('Error thrown while unsubscribing from push messaging.', e);
-      });
-  });
-}
-
-function subscribe() {
-  // Disable the button so it can't be changed while we process the permission request
-  var pushButton = document.querySelector('.js-push-button');
-  var vapidKey = new Uint8Array(<%= Base64.urlsafe_decode64(ENV['VAPID_PUBLIC_KEY']).bytes %>)
-  pushButton.disabled = true;
-
-  navigator.serviceWorker.ready.then(function(serviceWorkerRegistration) {
-    serviceWorkerRegistration.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: vapidKey})
-      .then(function(subscription) {
-        // The subscription was successful
-        isPushEnabled = true;
-        pushButton.textContent = 'Disable Push Messages';
-        pushButton.disabled = false;
-
-        return sendSubscriptionToServer(subscription);
-      })
-      .catch(function(e) {
-        if (Notification.permission === 'denied') {
-          console.log('Permission for Notifications was denied');
-          pushButton.disabled = true;
-        } else {
-          console.log('Unable to subscribe to push.', e);
-          pushButton.disabled = false;
-          pushButton.textContent = 'Enable Push Messages';
-        }
-      });
-  });
-}
-
-// Once the service worker is registered set the initial state
-function initializeState() {
-  // Are Notifications supported in the service worker?
-  if (!('showNotification' in ServiceWorkerRegistration.prototype)) {
-    console.log('Notifications aren\'t supported.');
-    return;
-  }
-
-  // Check the current Notification permission. If its denied, it's a permanent block until the user
-  // changes the permission
-  if (Notification.permission === 'denied') {
-    console.log('The user has blocked notifications.');
-    return;
-  }
-
-  // Check if push messaging is supported
-  if (!('PushManager' in window)) {
-    console.log('Push messaging isn\'t supported.');
-    return;
-  }
-
-  // We need the service worker registration to check for a subscription
-  navigator.serviceWorker.ready.then(function(serviceWorkerRegistration) {
-    // Do we already have a push message subscription?
-    serviceWorkerRegistration.pushManager.getSubscription().then(function(subscription) {
-        // Enable any UI which subscribes / unsubscribes from push messages.
-        var pushButton = document.querySelector('.js-push-button');
-        pushButton.disabled = false;
-
-        if (!subscription) {
-          // We aren’t subscribed to push, so set UI to allow the user to enable push
-          return;
-        }
-
-        // Keep your server in sync with the latest subscription
-        sendSubscriptionToServer(subscription);
-
-        // Set your UI to show they have subscribed for push messages
-        pushButton.textContent = 'Disable Push Messages';
-        isPushEnabled = true;
-      }).catch(function(err) {
-        console.log('Error during getSubscription()', err);
-      });
-  });
-}
-
-window.addEventListener('load', function() {
-  var pushButton = document.querySelector('.js-push-button');
-
-  pushButton.addEventListener('click', function(e) {
-    e.preventDefault()
-    if (isPushEnabled) {
-      unsubscribe();
-    } else {
-      subscribe();
+  CONTAINER_ID: 'retention-rocket-push-prompt',
+  CANCEL_BUTTON_ID: 'retention-rocket-push-cancel',
+  ENABLE_BUTTON_ID: 'retention-rocket-push-enable',
+  DEFAULT_STYLE: {
+    container: {
+      display: 'block',
+      position: 'absolute',
+      top: '20px',
+      left: '80px',
+      'z-index': '2147483647',
+      width: '320px',
+      padding: '15px',
+      border: '1px solid #cccccc',
+      'border-radius': '4px',
+      'background-color': '#ffffff',
+      'font-family': 'sans-serif',
+      color: '#000000',
+      'box-shadow': '0 5px 10px rgba(0,0,0,0.25)'
+    },
+    title: {
+      'font-size': '18px',
+      'font-weight': '600',
+      color: '#666666',
+      margin: '0 0 10px',
+      padding: '0'
+    },
+    body: {
+      'font-size': '14px',
+      margin: '0 0 20px',
+      padding: '0'
+    },
+    buttonContainer: {
+      'text-align': 'right',
+    },
+    cancelButton: {
+      display: 'inline-block',
+      padding: '7px 15px',
+      'text-align': 'center',
+      border: '1px solid #cccccc',
+      'background-color': '#ffffff',
+      'font-size': '14px',
+      color: '#aaaaaa',
+      'text-decoration': 'none',
+      'border-radius': '2px',
+      'margin-right': '5px',
+      cursor: 'pointer'
+    },
+    enableButton: {
+      display: 'inline-block',
+      padding: '7px 15px',
+      'text-align': 'center',
+      border: '1px solid #009900',
+      'background-color': '#009900',
+      'font-size': '14px',
+      color: '#ffffff',
+      'text-decoration': 'none',
+      'border-radius': '2px',
+      cursor: 'pointer'
     }
-  });
+  },
 
-  // Check that service workers are supported, if so, progressively enhance and add push messaging
-  // support, otherwise continue without it.
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/serviceworker.js').then(initializeState);
-  } else {
-    console.log('Service workers aren\'t supported in this browser.');
+  isPushEnabled: false,
+
+  // Call to get the ball rolling. Pass a callback function that will be called with a single
+  // boolean argument: `true` if already subscribed and `false` if not.
+  initialize: function(callback) {
+    window.addEventListener('load', function() {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/serviceworker.js').then(function() {
+          RetentionRocket.WebPush._register(callback)
+        })
+      }
+    })
+  },
+
+  // Prompts the user to enable notifications (custom prompt, not the browser prompt).
+  //
+  //   options        - a JS object containing the labels and styling for the prompt UI
+  //   callback       - called if the user chooses to subscribe, given a single boolean argument
+  //                    that is `true` if the subscription worked and `false` if not
+  //   cancelCallback - called if the user canceled the prompt and did not install
+  //
+  prompt: function(options, callback, cancelCallback) {
+    if (Notification.permission === 'denied') {
+      return false
+    } else {
+      this._showPrompt(options, callback, cancelCallback)
+      return true
+    }
+  },
+
+  // Call to unsubscribe the user. Pass a callback function that will be called with a single
+  // boolean argument: `true` if the user was able to be unsubscribed and `false` if not.
+  unsubscribe: function(callback) {
+    var self = this
+
+    callback = callback || function() {}
+
+    navigator.serviceWorker.ready.then(function(serviceWorkerRegistration) {
+      serviceWorkerRegistration.pushManager.getSubscription().then(function(subscription) {
+        if (!subscription) {
+          self.isPushEnabled = false
+          callback(false, 'No subscription object')
+          return
+        }
+
+        self._serverUnsubscribe(subscription);
+
+        subscription.unsubscribe().then(function() {
+          self.isPushEnabled = false
+          callback(true)
+        }).catch(function(e) {
+          callback(false, e)
+        })
+      }).catch(function(e) {
+        callback(false, e)
+      })
+    })
+  },
+
+  // Called internally to add subscription details to the server
+  _serverSubscribe: function(subscription) {
+    fetch('/subscribe', { method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(subscription) })
+  },
+
+  // Called internally to tell the server we've unsubscribed
+  _serverUnsubscribe: function(subscription) {
+    fetch('/unsubscribe', { method: 'DELETE', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(subscription) })
+  },
+
+  // Called internally once the ServiceWorker script has been registered
+  _register: function(callback) {
+    var self = this
+    callback = callback || function() {}
+
+    if (!('showNotification' in ServiceWorkerRegistration.prototype)) {
+      callback(false, 'Notifications not supported')
+      return
+    }
+    if (Notification.permission === 'denied') {
+      callback(false, 'Permission denied')
+      return
+    }
+    if (!('PushManager' in window)) {
+      callback(false, 'Push not supported')
+      return
+    }
+
+    // We need the service worker registration to check for a subscription
+    navigator.serviceWorker.ready.then(function(serviceWorkerRegistration) {
+      // Do we already have a push message subscription?
+      serviceWorkerRegistration.pushManager.getSubscription().then(function(subscription) {
+        if (!subscription) {
+          callback(false, 'No subscription yet')
+          return
+        }
+        RetentionRocket.WebPush._serverSubscribe(subscription)
+        RetentionRocket.WebPush.isPushEnabled = true
+        callback(true)
+      }).catch(function(e) {
+        callback(false, e)
+      })
+    })
+  },
+
+  // Called internally to subscribe the user
+  _subscribe: function(callback) {
+    var self = this,
+        vapidKey = new Uint8Array(<%= Base64.urlsafe_decode64(ENV['VAPID_PUBLIC_KEY']).bytes %>)
+
+    callback = callback || function() {}
+
+    navigator.serviceWorker.ready.then(function(serviceWorkerRegistration) {
+      serviceWorkerRegistration.pushManager.subscribe({userVisibleOnly: true,
+        applicationServerKey: vapidKey}).then(function(subscription) {
+          self.isPushEnabled = true
+          callback(true)
+          return self._serverSubscribe(subscription)
+        }).catch(function(e) {
+          if (Notification.permission === 'denied') {
+            callback(false, 'Permission denied')
+          } else {
+            callback(false, e)
+          }
+        })
+    })
+  },
+
+  _showPrompt(options, callback, cancelCallback) {
+    var container = document.createElement('div'),
+        title = document.createElement('div'),
+        body = document.createElement('p'),
+        buttonContainer = document.createElement('div'),
+        cancelButton = document.createElement('a'),
+        enableButton = document.createElement('a')
+
+    container.setAttribute('id', this.CONTAINER_ID)
+    container.setAttribute('style', this._objectToStyle(this.DEFAULT_STYLE.container))
+
+    title.setAttribute('style', this._objectToStyle(this.DEFAULT_STYLE.title))
+    title.textContent = options.title
+    container.appendChild(title)
+
+    body.setAttribute('style', this._objectToStyle(this.DEFAULT_STYLE.body))
+    body.textContent = options.body
+    container.appendChild(body)
+
+    cancelButton.setAttribute('style', this._objectToStyle(this.DEFAULT_STYLE.cancelButton))
+    cancelButton.setAttribute('id', this.CANCEL_BUTTON_ID)
+    cancelButton.textContent = options.cancelLabel
+
+    enableButton.setAttribute('style', this._objectToStyle(this.DEFAULT_STYLE.enableButton))
+    enableButton.setAttribute('id', this.ENABLE_BUTTON_ID)
+    enableButton.textContent = options.enableLabel
+
+    buttonContainer.setAttribute('style', this._objectToStyle(this.DEFAULT_STYLE.buttonContainer))
+    buttonContainer.appendChild(cancelButton)
+    buttonContainer.appendChild(enableButton)
+    container.appendChild(buttonContainer)
+
+    document.body.appendChild(container)
+
+    callback = callback || function() {}
+    cancelCallback = cancelCallback || function() {}
+
+    enableButton.addEventListener('click', function(e) {
+      e.preventDefault()
+      this._subscribe(callback)
+      container.remove()
+    }.bind(this))
+
+    // cancel button
+    cancelButton.addEventListener('click', function(e) {
+      e.preventDefault()
+      container.remove()
+      cancelCallback()
+    }.bind(this))
+  },
+
+  // Transforms an object like { foo: 'bar', baz: 'qux' } to a CSS style attribute like
+  // "foo:bar; baz:qux;"
+  _objectToStyle(object) {
+    var styles = []
+
+    for (var prop in object) {
+      if (object.hasOwnProperty(prop)) {
+        styles.push(prop + ':' + object[prop])
+      }
+    }
+
+    return styles.join('; ')
   }
-});
+
+}
