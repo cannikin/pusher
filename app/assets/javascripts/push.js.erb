@@ -107,30 +107,32 @@ RetentionRocket.WebPush = {
   //
   //   Returns `false` if unsubscribe failed and a second string argument with an error message
   unsubscribe: function(callback) {
-    var self = this
-
     callback = callback || function() {}
 
     navigator.serviceWorker.ready.then(function(serviceWorkerRegistration) {
       serviceWorkerRegistration.pushManager.getSubscription().then(function(subscription) {
         if (!subscription) {
-          self.isPushEnabled = false
+          this.isPushEnabled = false
+          this._log('web-push-prompt', { error: 'no subscription object' })
           callback(false, 'No subscription object')
           return
         }
 
-        self._serverUnsubscribe(subscription);
+        this._serverUnsubscribe(subscription);
 
         subscription.unsubscribe().then(function() {
-          self.isPushEnabled = false
+          this.isPushEnabled = false
+          this._log('web-push-prompt', { action: 'unsubscribed' })
           callback(true)
-        }).catch(function(e) {
+        }.bind(this)).catch(function(e) {
+          this._log('web-push-prompt', { error: e })
           callback(false, e)
-        })
-      }).catch(function(e) {
+        }.bind(this))
+      }.bind(this)).catch(function(e) {
+        this._log('web-push-prompt', { error: e })
         callback(false, e)
-      })
-    })
+      }.bind(this))
+    }.bind(this))
   },
 
   // Called internally to add subscription details to the server
@@ -147,7 +149,6 @@ RetentionRocket.WebPush = {
 
   // Called internally once the ServiceWorker script has been registered
   _register: function(callback) {
-    var self = this
     callback = callback || function() {}
 
     if (!('showNotification' in ServiceWorkerRegistration.prototype)) {
@@ -182,35 +183,40 @@ RetentionRocket.WebPush = {
 
   // Called internally to subscribe the user
   _subscribe: function(callback) {
-    var self = this,
-        vapidKey = new Uint8Array(<%= Base64.urlsafe_decode64(ENV['VAPID_PUBLIC_KEY']).bytes %>)
+    var vapidKey = new Uint8Array(<%= Base64.urlsafe_decode64(ENV['VAPID_PUBLIC_KEY']).bytes %>)
 
     callback = callback || function() {}
 
     navigator.serviceWorker.ready.then(function(serviceWorkerRegistration) {
-      serviceWorkerRegistration.pushManager.subscribe({userVisibleOnly: true,
-        applicationServerKey: vapidKey}).then(function(subscription) {
-          self.isPushEnabled = true
+      serviceWorkerRegistration.pushManager.subscribe({ userVisibleOnly: true,
+        applicationServerKey: vapidKey }).then(function(subscription) {
+          this.isPushEnabled = true
+          this._log('web-push-prompt', { action: 'subscribed' })
           callback(true)
-          return self._serverSubscribe(subscription)
-        }).catch(function(e) {
+          return this._serverSubscribe(subscription)
+        }.bind(this)).catch(function(e) {
           if (Notification.permission === 'denied') {
+            this._log('web-push-prompt', { error: 'permission denied' })
             callback(false, 'Permission denied')
           } else {
+            this._log('web-push-prompt', { error: e })
             callback(false, e)
           }
-        })
-    })
+        }.bind(this))
+    }.bind(this))
   },
 
   _showPrompt(options, callback, cancelCallback) {
     var elements = this._createPrompt(options)
+
+    this._log('web-push-prompt', { action: 'show' })
 
     callback = callback || function() {}
     cancelCallback = cancelCallback || function() {}
 
     elements.enableButton.addEventListener('click', function(e) {
       e.preventDefault()
+      this._log('web-push-prompt', { action: 'accept' })
       this._subscribe(callback)
       elements.container.remove()
     }.bind(this))
@@ -218,6 +224,7 @@ RetentionRocket.WebPush = {
     // cancel button
     elements.cancelButton.addEventListener('click', function(e) {
       e.preventDefault()
+      this._log('web-push-prompt', { action: 'cancel' })
       elements.container.remove()
       cancelCallback()
     }.bind(this))
@@ -280,6 +287,14 @@ RetentionRocket.WebPush = {
     }
 
     return styles.join('; ')
+  },
+
+  _log(action, properties) {
+    if (typeof ahoy !== 'undefined') {
+      ahoy.track(action, properties)
+    } else {
+      console.log(action, properties)
+    }
   }
 
 }
