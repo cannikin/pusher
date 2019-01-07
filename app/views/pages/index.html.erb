@@ -11,7 +11,7 @@
   window.addEventListener('DOMContentLoaded', function() {
     var button = document.querySelector('.js-push-button'),
         // callback function that changes the button label to "Unsubscribe" the result is `true`
-        updateButtonPositive = function(result, error) {
+        subscribedCallback = function(result, error) {
           console.log(result, error)
           if (result) {
             button.textContent = 'Unsubscribe'
@@ -20,7 +20,7 @@
           }
         },
         // callback function that changes the button label to "Unsubscribe" the result is `false`
-        updateButtonNegative = function(result, error) {
+        notSubscribedCallback = function(result, error) {
           console.log(result, error)
           if (!result) {
             button.textContent = 'Unsubscribe'
@@ -29,13 +29,13 @@
           }
         },
         // callback function if user cancels the prompt
-        cancelButton = function() {
+        cancelledCallback = function() {
           console.log('User dismissed prompt')
         }
 
     // Initialize first with the callback that will be passed `true` if user is already subscribed,
     // `false` otherwise
-    RetentionRocket.WebPush.initialize(updateButtonPositive)
+    RetentionRocket.WebPush.initialize(subscribedCallback)
 
     // Clicking the test button above
     button.addEventListener('click', function(e) {
@@ -44,11 +44,25 @@
       if (RetentionRocket.WebPush.isPushEnabled) {
         // If push is enabled then clicking the button should unsubscribe (label will be changed via
         // callbacks)
-        RetentionRocket.WebPush.unsubscribe(updateButtonNegative)
+        RetentionRocket.WebPush.unsubscribe(notSubscribedCallback)
       } else {
         // If push isn't already enabled, then prompt the user to allow it
-        if (RetentionRocket.WebPush.prompt({ title: "Never miss a deal!",
-          body: "Enable notifications to hear about exclusive offers before anyone else!", cancelLabel: "Not Now", enableLabel: "Allow" }, updateButtonPositive, cancelButton)) {
+        if (RetentionRocket.WebPush.prompt({
+              title: "Never miss a deal!",
+              body: "Enable notifications to hear about exclusive offers before anyone else!",
+              cancelLabel: "Not Now",
+              enableLabel: "Allow",
+              style: {
+                container: {
+                  'border-width': '2px',
+                  'border-style': 'dashed',
+                  'border-radius': '10px'
+                },
+                enableButton: {
+                  'font-weight': 'bold'
+                }
+              }
+            }, subscribedCallback, cancelledCallback)) {
           // if prompt() returns `true` then it was shown successfully
           console.log('Prompt shown')
         } else {

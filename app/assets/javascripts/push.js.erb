@@ -9,59 +9,59 @@ RetentionRocket.WebPush = {
   ENABLE_BUTTON_ID: 'retention-rocket-push-enable',
   DEFAULT_STYLE: {
     container: {
-      display: 'block',
-      position: 'absolute',
-      top: '20px',
-      left: '80px',
+      'display': 'block',
+      'position': 'absolute',
+      'top': '20px',
+      'left': '80px',
       'z-index': '2147483647',
-      width: '320px',
-      padding: '15px',
-      border: '1px solid #cccccc',
+      'width': '320px',
+      'padding': '15px',
+      'border': '1px solid #cccccc',
       'border-radius': '4px',
       'background-color': '#ffffff',
       'font-family': 'sans-serif',
-      color: '#000000',
+      'color': '#000000',
       'box-shadow': '0 5px 10px rgba(0,0,0,0.25)'
     },
     title: {
       'font-size': '18px',
       'font-weight': '600',
-      color: '#666666',
-      margin: '0 0 10px',
-      padding: '0'
+      'color': '#666666',
+      'margin': '0 0 10px',
+      'padding': '0'
     },
     body: {
       'font-size': '14px',
-      margin: '0 0 20px',
-      padding: '0'
+      'margin': '0 0 20px',
+      'padding': '0'
     },
     buttonContainer: {
       'text-align': 'right',
     },
     cancelButton: {
-      display: 'inline-block',
-      padding: '7px 15px',
+      'display': 'inline-block',
+      'padding': '7px 15px',
       'text-align': 'center',
-      border: '1px solid #cccccc',
+      'border': '1px solid #cccccc',
       'background-color': '#ffffff',
       'font-size': '14px',
-      color: '#aaaaaa',
+      'color': '#aaaaaa',
       'text-decoration': 'none',
       'border-radius': '2px',
       'margin-right': '5px',
-      cursor: 'pointer'
+      'cursor': 'pointer'
     },
     enableButton: {
-      display: 'inline-block',
-      padding: '7px 15px',
+      'display': 'inline-block',
+      'padding': '7px 15px',
       'text-align': 'center',
-      border: '1px solid #009900',
+      'border': '1px solid #009900',
       'background-color': '#009900',
       'font-size': '14px',
-      color: '#ffffff',
+      'color': '#ffffff',
       'text-decoration': 'none',
       'border-radius': '2px',
-      cursor: 'pointer'
+      'cursor': 'pointer'
     }
   },
 
@@ -79,7 +79,12 @@ RetentionRocket.WebPush = {
     })
   },
 
-  // Prompts the user to enable notifications (custom prompt, not the browser prompt).
+  // Prompts the user to enable notifications (custom prompt, not the browser prompt). If
+  // `initialize` returns `true` then you don't need to call this at all, you can push already!
+  //
+  // This call will return `false` if the user has previously denied you sending notifications.
+  //
+  // Arguments:
   //
   //   options        - a JS object containing the labels and styling for the prompt UI
   //   callback       - called if the user chooses to subscribe, given a single boolean argument
@@ -95,8 +100,12 @@ RetentionRocket.WebPush = {
     }
   },
 
-  // Call to unsubscribe the user. Pass a callback function that will be called with a single
-  // boolean argument: `true` if the user was able to be unsubscribed and `false` if not.
+  // Call to unsubscribe the user. Pass a callback function that will be called if the user was
+  // unsubscribed.
+  //
+  //   Returns `true` if unsubscribe was sucessful
+  //
+  //   Returns `false` if unsubscribe failed and a second string argument with an error message
   unsubscribe: function(callback) {
     var self = this
 
@@ -195,54 +204,68 @@ RetentionRocket.WebPush = {
   },
 
   _showPrompt(options, callback, cancelCallback) {
+    var elements = this._createPrompt(options)
+
+    callback = callback || function() {}
+    cancelCallback = cancelCallback || function() {}
+
+    elements.enableButton.addEventListener('click', function(e) {
+      e.preventDefault()
+      this._subscribe(callback)
+      elements.container.remove()
+    }.bind(this))
+
+    // cancel button
+    elements.cancelButton.addEventListener('click', function(e) {
+      e.preventDefault()
+      elements.container.remove()
+      cancelCallback()
+    }.bind(this))
+  },
+
+  _createPrompt(options) {
     var container = document.createElement('div'),
         title = document.createElement('div'),
         body = document.createElement('p'),
         buttonContainer = document.createElement('div'),
         cancelButton = document.createElement('a'),
-        enableButton = document.createElement('a')
+        enableButton = document.createElement('a'),
+        styles = JSON.parse(JSON.stringify(this.DEFAULT_STYLE))
+
+    Object.assign(styles.container, options.style.container)
+    Object.assign(styles.title, options.style.title)
+    Object.assign(styles.body, options.style.body)
+    Object.assign(styles.buttonContainer, options.style.buttonContainer)
+    Object.assign(styles.cancelButton, options.style.cancelButton)
+    Object.assign(styles.enableButton, options.style.enableButton)
 
     container.setAttribute('id', this.CONTAINER_ID)
-    container.setAttribute('style', this._objectToStyle(this.DEFAULT_STYLE.container))
+    container.setAttribute('style', this._objectToStyle(styles.container))
 
-    title.setAttribute('style', this._objectToStyle(this.DEFAULT_STYLE.title))
+    title.setAttribute('style', this._objectToStyle(styles.title))
     title.textContent = options.title
     container.appendChild(title)
 
-    body.setAttribute('style', this._objectToStyle(this.DEFAULT_STYLE.body))
+    body.setAttribute('style', this._objectToStyle(styles.body))
     body.textContent = options.body
     container.appendChild(body)
 
-    cancelButton.setAttribute('style', this._objectToStyle(this.DEFAULT_STYLE.cancelButton))
+    cancelButton.setAttribute('style', this._objectToStyle(styles.cancelButton))
     cancelButton.setAttribute('id', this.CANCEL_BUTTON_ID)
     cancelButton.textContent = options.cancelLabel
 
-    enableButton.setAttribute('style', this._objectToStyle(this.DEFAULT_STYLE.enableButton))
+    enableButton.setAttribute('style', this._objectToStyle(styles.enableButton))
     enableButton.setAttribute('id', this.ENABLE_BUTTON_ID)
     enableButton.textContent = options.enableLabel
 
-    buttonContainer.setAttribute('style', this._objectToStyle(this.DEFAULT_STYLE.buttonContainer))
+    buttonContainer.setAttribute('style', this._objectToStyle(styles.buttonContainer))
     buttonContainer.appendChild(cancelButton)
     buttonContainer.appendChild(enableButton)
     container.appendChild(buttonContainer)
 
     document.body.appendChild(container)
 
-    callback = callback || function() {}
-    cancelCallback = cancelCallback || function() {}
-
-    enableButton.addEventListener('click', function(e) {
-      e.preventDefault()
-      this._subscribe(callback)
-      container.remove()
-    }.bind(this))
-
-    // cancel button
-    cancelButton.addEventListener('click', function(e) {
-      e.preventDefault()
-      container.remove()
-      cancelCallback()
-    }.bind(this))
+    return { container: container, enableButton: enableButton, cancelButton: cancelButton }
   },
 
   // Transforms an object like { foo: 'bar', baz: 'qux' } to a CSS style attribute like
