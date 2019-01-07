@@ -73,10 +73,10 @@ RetentionRocket.WebPush = {
     window.addEventListener('load', function() {
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register(serviceWorkerPath).then(function() {
-          RetentionRocket.WebPush._register(callback)
-        })
+          this._register(callback)
+        }.bind(this))
       }
-    })
+    }.bind(this))
   },
 
   // Prompts the user to enable notifications (custom prompt, not the browser prompt). If
@@ -172,13 +172,13 @@ RetentionRocket.WebPush = {
           callback(false, 'No subscription yet')
           return
         }
-        RetentionRocket.WebPush._serverSubscribe(subscription)
-        RetentionRocket.WebPush.isPushEnabled = true
+        this._serverSubscribe(subscription)
+        this.isPushEnabled = true
         callback(true)
-      }).catch(function(e) {
+      }.bind(this)).catch(function(e) {
         callback(false, e)
-      })
-    })
+      }.bind(this))
+    }.bind(this))
   },
 
   // Called internally to subscribe the user
