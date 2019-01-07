@@ -69,10 +69,10 @@ RetentionRocket.WebPush = {
 
   // Call to get the ball rolling. Pass a callback function that will be called with a single
   // boolean argument: `true` if already subscribed and `false` if not.
-  initialize: function(callback) {
+  initialize: function(serviceWorkerPath, callback) {
     window.addEventListener('load', function() {
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/serviceworker.js').then(function() {
+        navigator.serviceWorker.register(serviceWorkerPath).then(function() {
           RetentionRocket.WebPush._register(callback)
         })
       }

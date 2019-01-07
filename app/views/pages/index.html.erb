@@ -35,7 +35,7 @@
 
     // Initialize first with the callback that will be passed `true` if user is already subscribed,
     // `false` otherwise
-    RetentionRocket.WebPush.initialize(subscribedCallback)
+    RetentionRocket.WebPush.initialize('/serviceworker.js', subscribedCallback)
 
     // Clicking the test button above
     button.addEventListener('click', function(e) {
