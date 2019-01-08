@@ -12,6 +12,9 @@
 
 ActiveRecord::Schema.define(version: 2018_12_13_180544) do
 
+  # These are extensions that must be enabled in order to support this database
+  enable_extension "plpgsql"
+
   create_table "web_push_optins", force: :cascade do |t|
     t.string "endpoint"
     t.string "p256dh"
