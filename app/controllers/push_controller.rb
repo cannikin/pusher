@@ -6,17 +6,25 @@ class PushController < ApplicationController
   rescue_from WebPushService::InvalidSubscription,  with: :render_subscription_problem
 
   def create
-    WebPushOptin.where(:endpoint => webpush_params[:endpoint])
-      .first_or_create(webpush_params.except(:endpoint))
+    if WebPushOptin.find_by(:endpoint => webpush_params[:endpoint])
+      head :ok
+    else
+      WebPushOptin.create!(webpush_params)
+      head :created
+    end
   end
 
   def destroy
     WebPushOptin.where(:endpoint => webpush_params[:endpoint]).destroy_all
+    head :no_content
   end
 
   def send_message
     output = WebPushService.new(web_push_optin: WebPushOptin.last, web_push_message: web_push_message).send!
     render :json => output
+  rescue WebPushService::InvalidSubscription => e
+    # delete invalid subscription
+    head :gone
   end
 
   private
@@ -37,7 +45,8 @@ class PushController < ApplicationController
     WebPushMessage.new({
       :title => "Hello",
       :body  => "The time is #{Time.current}",
-      :icon  => view_context.asset_path('push-icon.jpg')
+      :icon  => view_context.asset_path('push-icon.jpg'),
+      :url   => sample_url
     })
   end
 
