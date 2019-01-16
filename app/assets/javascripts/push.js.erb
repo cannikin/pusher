@@ -64,173 +64,96 @@ RetentionRocket.WebPush = {
       'cursor': 'pointer'
     }
   },
+  vapidKey: new Uint8Array(<%= Base64.urlsafe_decode64(ENV['VAPID_PUBLIC_KEY']).bytes %>),
+  isPermissionSet: Notification.permission !== 'default',
 
-  isPushEnabled: false,
-
-  // Call to get the ball rolling. Pass a callback function that will be called with a single
-  // boolean argument: `true` if already subscribed and `false` if not.
-  initialize: function(serviceWorkerPath, callback) {
-    window.addEventListener('load', function() {
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register(serviceWorkerPath).then(function() {
-          this._register(callback)
-        }.bind(this))
+  initialize: function(options, allowCallback, cancelCallback) {
+    if (this.verifySupport()) {
+      if (!this.isPermissionSet) {
+        this.prompt(options, allowCallback, cancelCallback)
+      } else {
+        this.request()
       }
-    }.bind(this))
-  },
-
-  // Prompts the user to enable notifications (custom prompt, not the browser prompt). If
-  // `initialize` returns `true` then you don't need to call this at all, you can push already!
-  //
-  // This call will return `false` if the user has previously denied you sending notifications.
-  //
-  // Arguments:
-  //
-  //   options        - a JS object containing the labels and styling for the prompt UI
-  //   callback       - called if the user chooses to subscribe, given a single boolean argument
-  //                    that is `true` if the subscription worked and `false` if not
-  //   cancelCallback - called if the user canceled the prompt and did not install
-  //
-  prompt: function(options, callback, cancelCallback) {
-    if (Notification.permission === 'denied') {
-      return false
-    } else {
-      this._showPrompt(options, callback, cancelCallback)
-      return true
     }
   },
 
-  // Call to unsubscribe the user. Pass a callback function that will be called if the user was
-  // unsubscribed.
-  //
-  //   Returns `true` if unsubscribe was sucessful
-  //
-  //   Returns `false` if unsubscribe failed and a second string argument with an error message
-  unsubscribe: function(callback) {
-    callback = callback || function() {}
+  prompt: function(options, allowCallback, cancelCallback) {
+    var elements = this.createPrompt(options)
 
-    navigator.serviceWorker.ready.then(function(serviceWorkerRegistration) {
-      serviceWorkerRegistration.pushManager.getSubscription().then(function(subscription) {
-        if (!subscription) {
-          this.isPushEnabled = false
-          this._log('web-push-prompt', { error: 'no subscription object' })
-          callback(false, 'No subscription object')
-          return
-        }
+    elements.enableButton.addEventListener('click', function(event) {
+      this.promptAction(event, 'accept', allowCallback || function() {})
+      this.request()
+    }.bind(this))
 
-        this._serverUnsubscribe(subscription);
+    elements.cancelButton.addEventListener('click', function(event) {
+      this.promptAction(event, 'cancel', cancelCallback || function() {})
+    }.bind(this))
 
-        subscription.unsubscribe().then(function() {
-          this.isPushEnabled = false
-          this._log('web-push-prompt', { action: 'unsubscribed' })
-          callback(true)
-        }.bind(this)).catch(function(e) {
-          this._log('web-push-prompt', { error: e })
-          callback(false, e)
-        }.bind(this))
-      }.bind(this)).catch(function(e) {
-        this._log('web-push-prompt', { error: e })
-        callback(false, e)
-      }.bind(this))
+    this.log('web-push-prompt', { action: 'show' })
+  },
+
+  promptAction: function(event, action, callback) {
+    event.preventDefault()
+    this.log('web-push-prompt', { action: action })
+    document.getElementById(this.CONTAINER_ID).remove()
+    callback()
+  },
+
+  request: function(callback) {
+    return new Promise(function(resolve, reject) {
+      const permissionResult = Notification.requestPermission(function(result) {
+        resolve(result);
+      });
+
+      if (permissionResult) {
+        permissionResult.then(resolve, reject);
+      }
+    })
+    .then(function(permissionResult) {
+      this.log('web-push-permission', { permission: permissionResult })
+      if (permissionResult === 'granted') {
+        this.register()
+      }
+    }.bind(this))
+    .catch(function(error) {
+      this.log('web-push-permission', { error: error })
     }.bind(this))
   },
 
+  // registers service worker and subscribes to push notifications
+  register: function() {
+    return navigator.serviceWorker.register('/a/rr/serviceworker.js')
+    .then(function(registration) {
+      const subscribeOptions = {
+        userVisibleOnly: true,
+        applicationServerKey: this.vapidKey
+      }
+
+      return registration.pushManager.subscribe(subscribeOptions);
+    }.bind(this))
+    .then(function(pushSubscription) {
+      this.serverSubscribe(pushSubscription)
+      return pushSubscription;
+    }.bind(this))
+    .catch(function(error) {
+      console.log(error)
+    })
+  },
+
+  // checks that all required APIs are available in this browser
+  verifySupport: function() {
+    return 'serviceWorker' in navigator &&
+           'showNotification' in ServiceWorkerRegistration.prototype &&
+           'PushManager' in window
+  },
+
   // Called internally to add subscription details to the server
-  _serverSubscribe: function(subscription) {
+  serverSubscribe: function(subscription) {
     fetch('/subscribe', { method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(subscription) })
   },
 
-  // Called internally to tell the server we've unsubscribed
-  _serverUnsubscribe: function(subscription) {
-    fetch('/unsubscribe', { method: 'DELETE', credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(subscription) })
-  },
-
-  // Called internally once the ServiceWorker script has been registered
-  _register: function(callback) {
-    callback = callback || function() {}
-
-    if (!('showNotification' in ServiceWorkerRegistration.prototype)) {
-      callback(false, 'Notifications not supported')
-      return
-    }
-    if (Notification.permission === 'denied') {
-      callback(false, 'Permission denied')
-      return
-    }
-    if (!('PushManager' in window)) {
-      callback(false, 'Push not supported')
-      return
-    }
-
-    // We need the service worker registration to check for a subscription
-    navigator.serviceWorker.ready.then(function(serviceWorkerRegistration) {
-      // Do we already have a push message subscription?
-      serviceWorkerRegistration.pushManager.getSubscription().then(function(subscription) {
-        if (!subscription) {
-          callback(false, 'No subscription yet')
-          return
-        }
-        this._serverSubscribe(subscription)
-        this.isPushEnabled = true
-        callback(true)
-      }.bind(this)).catch(function(e) {
-        callback(false, e)
-      }.bind(this))
-    }.bind(this))
-  },
-
-  // Called internally to subscribe the user
-  _subscribe: function(callback) {
-    var vapidKey = new Uint8Array(<%= Base64.urlsafe_decode64(ENV['VAPID_PUBLIC_KEY']).bytes %>)
-
-    callback = callback || function() {}
-
-    navigator.serviceWorker.ready.then(function(serviceWorkerRegistration) {
-      serviceWorkerRegistration.pushManager.subscribe({ userVisibleOnly: true,
-        applicationServerKey: vapidKey }).then(function(subscription) {
-          this.isPushEnabled = true
-          this._log('web-push-prompt', { action: 'subscribed' })
-          callback(true)
-          return this._serverSubscribe(subscription)
-        }.bind(this)).catch(function(e) {
-          if (Notification.permission === 'denied') {
-            this._log('web-push-prompt', { error: 'permission denied' })
-            callback(false, 'Permission denied')
-          } else {
-            this._log('web-push-prompt', { error: e })
-            callback(false, e)
-          }
-        }.bind(this))
-    }.bind(this))
-  },
-
-  _showPrompt(options, callback, cancelCallback) {
-    var elements = this._createPrompt(options)
-
-    this._log('web-push-prompt', { action: 'show' })
-
-    callback = callback || function() {}
-    cancelCallback = cancelCallback || function() {}
-
-    elements.enableButton.addEventListener('click', function(e) {
-      e.preventDefault()
-      this._log('web-push-prompt', { action: 'accept' })
-      this._subscribe(callback)
-      elements.container.remove()
-    }.bind(this))
-
-    // cancel button
-    elements.cancelButton.addEventListener('click', function(e) {
-      e.preventDefault()
-      this._log('web-push-prompt', { action: 'cancel' })
-      elements.container.remove()
-      cancelCallback()
-    }.bind(this))
-  },
-
-  _createPrompt(options) {
+  createPrompt(options) {
     var container = document.createElement('div'),
         title = document.createElement('div'),
         body = document.createElement('p'),
@@ -247,25 +170,25 @@ RetentionRocket.WebPush = {
     Object.assign(styles.enableButton, options.style.enableButton)
 
     container.setAttribute('id', this.CONTAINER_ID)
-    container.setAttribute('style', this._objectToStyle(styles.container))
+    container.setAttribute('style', this.objectToStyle(styles.container))
 
-    title.setAttribute('style', this._objectToStyle(styles.title))
+    title.setAttribute('style', this.objectToStyle(styles.title))
     title.textContent = options.title
     container.appendChild(title)
 
-    body.setAttribute('style', this._objectToStyle(styles.body))
+    body.setAttribute('style', this.objectToStyle(styles.body))
     body.textContent = options.body
     container.appendChild(body)
 
-    cancelButton.setAttribute('style', this._objectToStyle(styles.cancelButton))
+    cancelButton.setAttribute('style', this.objectToStyle(styles.cancelButton))
     cancelButton.setAttribute('id', this.CANCEL_BUTTON_ID)
     cancelButton.textContent = options.cancelLabel
 
-    enableButton.setAttribute('style', this._objectToStyle(styles.enableButton))
+    enableButton.setAttribute('style', this.objectToStyle(styles.enableButton))
     enableButton.setAttribute('id', this.ENABLE_BUTTON_ID)
     enableButton.textContent = options.enableLabel
 
-    buttonContainer.setAttribute('style', this._objectToStyle(styles.buttonContainer))
+    buttonContainer.setAttribute('style', this.objectToStyle(styles.buttonContainer))
     buttonContainer.appendChild(cancelButton)
     buttonContainer.appendChild(enableButton)
     container.appendChild(buttonContainer)
@@ -277,7 +200,7 @@ RetentionRocket.WebPush = {
 
   // Transforms an object like { foo: 'bar', baz: 'qux' } to a CSS style attribute like
   // "foo:bar; baz:qux;"
-  _objectToStyle(object) {
+  objectToStyle(object) {
     var styles = []
 
     for (var prop in object) {
@@ -289,7 +212,7 @@ RetentionRocket.WebPush = {
     return styles.join('; ')
   },
 
-  _log(action, properties) {
+  log(action, properties) {
     if (typeof ahoy !== 'undefined') {
       ahoy.track(action, properties)
     } else {
