@@ -1,75 +1,29 @@
 <div style="font-family: sans-serif;">
   <p>Lorem ipsum dolor amet irony chia next level adaptogen banjo everyday carry marfa. Plaid dreamcatcher butcher, roof party four loko wayfarers tote bag occupy master cleanse fanny pack vice. Kitsch distillery plaid thundercats yr echo park put a bird on it church-key chicharrones venmo humblebrag swag etsy. Semiotics put a bird on it post-ironic, pour-over leggings artisan 90's pok pok chambray. Squid sustainable franzen kinfolk. Listicle blog flannel, +1 you probably haven't heard of them literally microdosing readymade man braid master cleanse shaman. Vinyl blog glossier activated charcoal, readymade franzen direct trade tbh master cleanse hella cronut succulents plaid distillery.</p>
-  <p style="text-align: center">
-    <%= link_to 'Initial Label', '#', :class => 'js-push-button', :style => 'display: inline-block; padding: 8px 15px; background-color: #eeeeee; color: #000000; text-decoration: none; font-weight: bold; border: 1px solid #aaaaaa' %>
-  </p>
+
   <p>Cliche tumeric mustache, YOLO man bun gentrify iceland actually street art jean shorts umami dreamcatcher pabst PBR&B. Man bun quinoa disrupt kogi sartorial unicorn chia aesthetic deep v. Banh mi tofu seitan vexillologist live-edge, drinking vinegar hell of iceland put a bird on it hashtag glossier forage. Iceland viral church-key tacos gastropub slow-carb, biodiesel typewriter coloring book freegan fam. 3 wolf moon ethical poutine photo booth kickstarter green juice cold-pressed man braid forage coloring book.</p>
 </div>
 
 <script type="text/javascript">
-  // wait until the DOM is loaded
-  window.addEventListener('DOMContentLoaded', function() {
-    var button = document.querySelector('.js-push-button'),
-        // callback function that changes the button label to "Unsubscribe" the result is `true`
-        subscribedCallback = function(result, error) {
-          console.log(result, error)
-          if (result) {
-            button.textContent = 'Unsubscribe'
-          } else {
-            button.textContent = 'Show Prompt'
-          }
+  RetentionRocket.WebPush.initialize(
+    {
+      title: "Never miss a deal!",
+      body: "Enable notifications to hear about exclusive offers before anyone else!",
+      cancelLabel: "Not Now",
+      enableLabel: "Allow",
+      style: {
+        container: {
+          'border-width': '2px',
+          'border-style': 'dashed',
+          'border-radius': '10px'
         },
-        // callback function that changes the button label to "Unsubscribe" the result is `false`
-        notSubscribedCallback = function(result, error) {
-          console.log(result, error)
-          if (!result) {
-            button.textContent = 'Unsubscribe'
-          } else {
-            button.textContent = 'Show Prompt'
-          }
-        },
-        // callback function if user cancels the prompt
-        cancelledCallback = function() {
-          console.log('User dismissed prompt')
-        }
-
-    // Initialize first with the callback that will be passed `true` if user is already subscribed,
-    // `false` otherwise
-    RetentionRocket.WebPush.initialize('/serviceworker.js', subscribedCallback)
-
-    // Clicking the test button above
-    button.addEventListener('click', function(e) {
-      e.preventDefault();
-
-      if (RetentionRocket.WebPush.isPushEnabled) {
-        // If push is enabled then clicking the button should unsubscribe (label will be changed via
-        // callbacks)
-        RetentionRocket.WebPush.unsubscribe(notSubscribedCallback)
-      } else {
-        // If push isn't already enabled, then prompt the user to allow it
-        if (RetentionRocket.WebPush.prompt({
-              title: "Never miss a deal!",
-              body: "Enable notifications to hear about exclusive offers before anyone else!",
-              cancelLabel: "Not Now",
-              enableLabel: "Allow",
-              style: {
-                container: {
-                  'border-width': '2px',
-                  'border-style': 'dashed',
-                  'border-radius': '10px'
-                },
-                enableButton: {
-                  'font-weight': 'bold'
-                }
-              }
-            }, subscribedCallback, cancelledCallback)) {
-          // if prompt() returns `true` then it was shown successfully
-          console.log('Prompt shown')
-        } else {
-          // if prompt() returns `false` then it wasn't show because user already denied permission
-          console.log('User has already denied permission for notifications')
+        enableButton: {
+          'font-weight': 'bold'
         }
       }
-    })
-  })
+    },
+    function() { console.log('Allowed!') },
+    function() { console.log('Now now!') }
+  )
+
 </script>
